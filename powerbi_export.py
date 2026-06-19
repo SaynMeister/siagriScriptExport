@@ -4,15 +4,10 @@ import time
 import msal
 import requests
 import pandas as pd
-import smtplib
 import os
 from datetime import datetime, timedelta
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
@@ -31,12 +26,6 @@ DB_URL = (
     f"@{os.environ['MARIADB_HOST']}:{os.environ['MARIADB_PORT']}/{os.environ['MARIADB_DATABASE']}"
     f"?charset=utf8mb4"
 )
-
-EMAIL_REMETENTE = os.environ["EMAIL_REMETENTE"]
-EMAIL_SENHA     = os.environ["EMAIL_SENHA"]
-EMAIL_DESTINO   = os.environ["EMAIL_DESTINO"]
-SMTP_HOST       = os.environ["SMTP_HOST"]
-SMTP_PORT       = int(os.environ["SMTP_PORT"])
 
 SCOPE = [
     "https://analysis.windows.net/powerbi/api/Workspace.Read.All",
@@ -69,32 +58,6 @@ def log(msg):
     with open(LOG_PATH, "a", encoding="utf-8") as f:
         f.write(linha + "\n")
 
-# ── E-mail ──────────────────────────────────────────────────
-def enviar_email(assunto, corpo, anexo=None):
-    try:
-        msg = MIMEMultipart()
-        msg["From"]    = EMAIL_REMETENTE
-        msg["To"]      = EMAIL_DESTINO
-        msg["Subject"] = assunto
-        msg.attach(MIMEText(corpo, "plain", "utf-8"))
-
-        if anexo and os.path.exists(anexo):
-            with open(anexo, "rb") as f:
-                part = MIMEBase("application", "octet-stream")
-                part.set_payload(f.read())
-                encoders.encode_base64(part)
-                part.add_header("Content-Disposition", f"attachment; filename={os.path.basename(anexo)}")
-                msg.attach(part)
-
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            server.login(EMAIL_REMETENTE, EMAIL_SENHA)
-            server.sendmail(EMAIL_REMETENTE, EMAIL_DESTINO, msg.as_string())
-
-        log("📧 E-mail enviado com sucesso!")
-    except Exception as e:
-        log(f"❌ Erro ao enviar e-mail: {e}")
-
 # ── Alerta de expiração do token ────────────────────────────
 def alertar_expiracao_token():
     if not os.path.exists(TOKEN_PATH):
@@ -116,13 +79,7 @@ def alertar_expiracao_token():
         dias_restantes = int(90 - dias_desde_uso)
 
         if dias_restantes <= 15:
-            log(f"⚠️ Token expira em ~{dias_restantes} dias!")
-            enviar_email(
-                assunto=f"⚠️ Token Power BI expira em {dias_restantes} dias",
-                corpo=f"O token de autenticação do Power BI vai expirar em aproximadamente {dias_restantes} dias.\n\n"
-                      f"Acesse a VM e execute o script manualmente para renovar o token antes que expire.\n\n"
-                      f"Se expirar sem renovação, a exportação de terça-feira vai falhar."
-            )
+            log(f"⚠️ Token expira em ~{dias_restantes} dias! Acesse a VM e rode o script manualmente para renovar.")
     except Exception as e:
         log(f"⚠️ Não foi possível verificar expiração do token: {e}")
 
@@ -200,23 +157,8 @@ def exportar_dados():
 
         log(f"✅ {len(df)} linhas salvas no banco (tabela: contas_a_receber)")
 
-        enviar_email(
-            assunto="✅ Exportação Power BI concluída",
-            corpo=f"A exportação de Contas a Receber foi concluída com sucesso!\n\n"
-                  f"📊 Linhas salvas: {len(df)}\n"
-                  f"🗄️ Banco: {os.environ['MARIADB_DATABASE']} › contas_a_receber\n"
-                  f"🕐 Horário: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}",
-        )
-
     except Exception as e:
         log(f"❌ Erro na exportação: {e}")
-        enviar_email(
-            assunto="❌ Erro na exportação Power BI",
-            corpo=f"Ocorreu um erro na exportação de Contas a Receber.\n\n"
-                  f"Erro: {e}\n"
-                  f"🕐 Horário: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n\n"
-                  f"Verifique o log em: {LOG_PATH}"
-        )
 
 os.makedirs(SAVE_PATH, exist_ok=True)
 exportar_dados()
