@@ -43,6 +43,11 @@ SUMMARIZECOLUMNS(
         KEEPFILTERS(VALUES('Base'[VENCIMENTO])),
         AND('Base'[VENCIMENTO] >= DATE(1900, 1, 1), 'Base'[VENCIMENTO] < TODAY())
     ),
+    FILTER(
+        KEEPFILTERS(VALUES('Base'[COD_TIP_DOCUMENTO])),
+        AND('Base'[COD_TIP_DOCUMENTO] <> "103", 'Base'[COD_TIP_DOCUMENTO] <> "106")
+    ),
+    TREATAS({"NORMAL"}, 'Base'[FONTE]),
     "saldo", 'medidas'[04.saldo]
 )
 ORDER BY
